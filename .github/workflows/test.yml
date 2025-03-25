@@ -1,29 +1,46 @@
-- name: Test: Download once
-  run: |
-    set -e
-    # 1) Remove or comment out time-check code entirely
+name: Test Single Download
 
-    # 2) Just do 1 iteration
-    for i in {1..1}; do
-        echo "Iteration $i/1 at $(date)"
-        tail -n +2 morning_cameras.csv | \
-        while IFS=, read -r sign_location_name direction roadway camera_number url id || [ -n "$id" ]; do
-            echo "Processing camera: $id"
-            mkdir -p "$id"
-            ts=$(date +%s%3N)
-            timestamp=$(date '+%Y%m%d_%I%M%P')
-            outfile="${id}/${id}_${timestamp}.jpg"
-            curl "${url}?${ts}" -o "$outfile"
-        done
-    done
+on:
+  workflow_dispatch:  # Allows manual triggering from the Actions tab
 
-    # 3) Commit & push
-    git config --global user.name "github-actions"
-    git config --global user.email "github-actions@github.com"
-    git add .
-    if ! git diff-index --quiet HEAD; then
-      git commit -m "Test run images: $(date '+%Y-%m-%d %H:%M:%S') [skip ci]"
-      git push origin HEAD:${GITHUB_REF#refs/heads/}
-    else
-      echo "No changes to commit."
-    fi
+jobs:
+  test-download:
+    runs-on: ubuntu-latest
+    
+    permissions:
+      contents: write  # Needed to push new files
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v3
+
+      - name: Download once
+        run: |
+          set -e
+          # Read CSV (skipping header), download each camera once
+          tail -n +2 morning_cameras.csv | \
+          while IFS=, read -r sign_location_name direction roadway camera_number url id || [ -n "$id" ]; do
+              echo "Processing camera: $id"
+              mkdir -p "$id"  # Create folder named after 'id'
+              
+              ts=$(date +%s%3N)          # Cache-busting timestamp
+              timestamp=$(date '+%Y%m%d_%I%M%P')  # e.g. 20250324_0304pm
+              outfile="${id}/${id}_${timestamp}.jpg"
+              
+              # Download image with cache-busting query param
+              curl "${url}?${ts}" -o "$outfile"
+          done
+
+      - name: Commit and push
+        run: |
+          git config --global user.name "github-actions"
+          git config --global user.email "github-actions@github.com"
+          
+          git add .
+          if ! git diff-index --quiet HEAD; then
+            git commit -m "Test single download: $(date '+%Y-%m-%d %H:%M:%S') [skip ci]"
+            # Push to the same branch that triggered the workflow
+            git push origin HEAD:${GITHUB_REF#refs/heads/}
+          else
+            echo "No changes to commit."
+          fi
