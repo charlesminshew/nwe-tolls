@@ -1,0 +1,29 @@
+- name: Test: Download once
+  run: |
+    set -e
+    # 1) Remove or comment out time-check code entirely
+
+    # 2) Just do 1 iteration
+    for i in {1..1}; do
+        echo "Iteration $i/1 at $(date)"
+        tail -n +2 morning_cameras.csv | \
+        while IFS=, read -r sign_location_name direction roadway camera_number url id || [ -n "$id" ]; do
+            echo "Processing camera: $id"
+            mkdir -p "$id"
+            ts=$(date +%s%3N)
+            timestamp=$(date '+%Y%m%d_%I%M%P')
+            outfile="${id}/${id}_${timestamp}.jpg"
+            curl "${url}?${ts}" -o "$outfile"
+        done
+    done
+
+    # 3) Commit & push
+    git config --global user.name "github-actions"
+    git config --global user.email "github-actions@github.com"
+    git add .
+    if ! git diff-index --quiet HEAD; then
+      git commit -m "Test run images: $(date '+%Y-%m-%d %H:%M:%S') [skip ci]"
+      git push origin HEAD:${GITHUB_REF#refs/heads/}
+    else
+      echo "No changes to commit."
+    fi
