@@ -2,53 +2,83 @@ name: Download Images (1 AM - 1 PM EDT)
 
 on:
   schedule:
-    - cron: "*/10 * * * *"
+    - cron: "*/10 * * * *"  # Runs every 10 minutes
   workflow_dispatch:
 
 jobs:
   download:
     runs-on: ubuntu-latest
+    
     permissions:
-      contents: write
+      contents: write  # Ensure the GITHUB_TOKEN can push
 
     steps:
-      - name: Checkout
+      - name: Check out repository
         uses: actions/checkout@v3
 
-      - name: Download and commit in one script
+      - name: Check time window
+        id: check_time  # We'll reference this step's outputs later
         run: |
-          set -e
-          # 1) Time check
+          # Determine current hour in EDT (24-hour format)
           current_hour=$(TZ="America/New_York" date +%H)
+          echo "Current hour in EDT: $current_hour"
+          # Remove any leading zeros
           current_hour=$(echo $current_hour | sed 's/^0*//')
+          # If outside 1–12 (i.e., <1 or >=13), set should_run to false
           if [ "$current_hour" -lt 1 ] || [ "$current_hour" -ge 13 ]; then
-            echo "Outside allowed time window. Exiting."
-            exit 0
+            echo "should_run=false" >> $GITHUB_OUTPUT
+            echo "Outside allowed time window (1 AM - 1 PM EDT)."
+          else
+            echo "should_run=true" >> $GITHUB_OUTPUT
+            echo "Within allowed time window (1 AM - 1 PM EDT)."
           fi
 
-          # 2) Do the 10-minute loop
+      - name: Download images in a loop
+        if: ${{ steps.check_time.outputs.should_run == 'true' }}
+        run: |
+          set -e
+          # Loop 10 times (once per minute for 10 minutes)
           for i in {1..10}; do
-              echo "Iteration $i/10 at $(date)"
+              echo "Iteration $i/10 at $(TZ="America/New_York" date '+%Y-%m-%d %I:%M:%S %p')"
+              # Read each row from the CSV (skipping header).
+              # The "|| [ -n "$id" ]" ensures we process the last line even if no trailing newline.
               tail -n +2 morning_cameras.csv | \
               while IFS=, read -r sign_location_name direction roadway camera_number url id || [ -n "$id" ]; do
                   echo "Processing camera: $id"
                   mkdir -p "$id"
+                  
+                  # Cache-busting timestamp (milliseconds)
                   ts=$(date +%s%3N)
-                  timestamp=$(date '+%Y%m%d_%I%M%P')
+                  
+                  # Generate a human-readable timestamp in EDT including seconds
+                  timestamp=$(TZ="America/New_York" date '+%Y%m%d_%I%M%S%P')
+                  
+                  # Build the output filename: id/id_timestamp.jpg
                   outfile="${id}/${id}_${timestamp}.jpg"
+                  
+                  # Download the image with a cache-busting query parameter
                   curl "${url}?${ts}" -o "$outfile"
               done
+              # Sleep 60s before the next iteration unless it's the last one
               if [ $i -lt 10 ]; then
+                  echo "Sleeping for 60 seconds..."
                   sleep 60
               fi
           done
 
-          # 3) Commit and push
+      - name: Commit and push new images
+        if: ${{ steps.check_time.outputs.should_run == 'true' }}
+        run: |
+          # Configure Git identity
           git config --global user.name "github-actions"
           git config --global user.email "github-actions@github.com"
+          
+          # Stage all changes (new images)
           git add .
+          
+          # Only commit if there are changes
           if ! git diff-index --quiet HEAD; then
-            git commit -m "Add images: $(date '+%Y-%m-%d %H:%M:%S') [skip ci]"
+            git commit -m "Add images: $(TZ="America/New_York" date '+%Y-%m-%d %I:%M:%S %p') [skip ci]"
             git push origin HEAD:${GITHUB_REF#refs/heads/}
           else
             echo "No changes to commit."
