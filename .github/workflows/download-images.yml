@@ -2,77 +2,51 @@ name: Download Images (1 AM - 1 PM EDT)
 
 on:
   schedule:
-    - cron: "*/10 * * * *"  # Runs every 10 minutes
+    - cron: "*/10 * * * *"
   workflow_dispatch:
 
 jobs:
   download:
     runs-on: ubuntu-latest
-    
-    # Give the GITHUB_TOKEN write permissions so we can push
     permissions:
       contents: write
 
     steps:
-      - name: Checkout Repository
+      - name: Checkout
         uses: actions/checkout@v3
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Check if within allowed time window (1 AM - 1 PM EDT)
-        run: |
-          # Determine current hour in EDT (24-hour format)
-          current_hour=$(TZ="America/New_York" date +%H)
-          echo "Current hour in EDT: $current_hour"
-          # Remove any leading zeros
-          current_hour=$(echo $current_hour | sed 's/^0*//')
-          # If current hour is outside 1–12 (1 AM–12:59 PM), exit
-          if [ "$current_hour" -lt 1 ] || [ "$current_hour" -ge 13 ]; then
-              echo "Outside allowed time window (1 AM - 1 PM EDT). Exiting."
-              exit 0
-          fi
-
-      - name: Download images in a loop
+      - name: Download and commit in one script
         run: |
           set -e
-          # Repeat 10 times (once per minute for 10 minutes)
+          # 1) Time check
+          current_hour=$(TZ="America/New_York" date +%H)
+          current_hour=$(echo $current_hour | sed 's/^0*//')
+          if [ "$current_hour" -lt 1 ] || [ "$current_hour" -ge 13 ]; then
+            echo "Outside allowed time window. Exiting."
+            exit 0
+          fi
+
+          # 2) Do the 10-minute loop
           for i in {1..10}; do
               echo "Iteration $i/10 at $(date)"
-              # Read each row from the CSV (skip header).
-              # The '|| [ -n "$id" ]' ensures the last line is processed even without a newline.
               tail -n +2 morning_cameras.csv | \
               while IFS=, read -r sign_location_name direction roadway camera_number url id || [ -n "$id" ]; do
                   echo "Processing camera: $id"
-                  mkdir -p "$id"  # Create folder named after 'id' if not present
-
-                  # Cache-busting timestamp
+                  mkdir -p "$id"
                   ts=$(date +%s%3N)
-
-                  # Human-readable timestamp (e.g. 20250324_0304pm)
                   timestamp=$(date '+%Y%m%d_%I%M%P')
-
-                  # Download image into id/id_timestamp.jpg
                   outfile="${id}/${id}_${timestamp}.jpg"
                   curl "${url}?${ts}" -o "$outfile"
               done
-
-              # Sleep for 60s unless it's the last iteration
               if [ $i -lt 10 ]; then
-                  echo "Sleeping for 60 seconds..."
                   sleep 60
               fi
           done
 
-      - name: Commit and push new images
-        run: |
-          # Configure Git identity
+          # 3) Commit and push
           git config --global user.name "github-actions"
           git config --global user.email "github-actions@github.com"
-          
-          # Stage any changes (new images)
           git add .
-          
-          # Commit if there are changes
           if ! git diff-index --quiet HEAD; then
             git commit -m "Add images: $(date '+%Y-%m-%d %H:%M:%S') [skip ci]"
             git push origin HEAD:${GITHUB_REF#refs/heads/}
