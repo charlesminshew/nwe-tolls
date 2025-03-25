@@ -27,8 +27,8 @@ jobs:
               ts=$(date +%s%3N)
               
               # Generate a human-readable timestamp in EDT
-              timestamp=$(TZ="America/New_York" date '+%Y%m%d_%I%M%P')
-              
+              timestamp=$(TZ="America/New_York" date '+%Y%m%d_%I%M%S%P')
+          
               # Build the output filename: folder/id_timestamp.jpg
               outfile="${id}/${id}_${timestamp}.jpg"
               
