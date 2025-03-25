@@ -1,0 +1,6 @@
+﻿sign_location_name,direction,roadway,camera_number,url,id
+Sixes Road,southbound,I-575,75B-011.0-CMS-CAM21-01,https://srtaivedds.com/Images/Cameras/75B-011.0-CMS-CAM01-00001.jpg,sixes_sb
+Woodstock Road,southbound,I-75,75B-275.0-CMS-CAM01-01,https://srtaivedds.com/Images/Cameras/75B-275.0-CMS-CAM01-00001.jpg,woodstock_sb
+Barrett Parkway,southbound,I-575,75B-002.0-CMS-CAM01-01,https://srtaivedds.com/Images/Cameras/75B-002.0-CMS-CAM01-00001.jpg,barrett_sb
+Roswell Road,both,I-75,75B-ROS31-CMS-CAM31-01,http://srtaivedds.com/Images/Cameras/75B-ROS31-CMS-CAM31-00001.jpg,roswell
+Big Shanty Road,both,I-75,75B-BSH31-CMS-CAM31-1,https://srtaivedds.com/Images/Cameras/75B-BSH31-CMS-CAM31-00001.jpg,big_shanty
